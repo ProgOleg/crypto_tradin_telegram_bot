@@ -1,7 +1,6 @@
 aiogram==2.12
 aiohttp==3.7.4.post0
-fastapi==0.63.0
-uvicorn==0.13.4
+
 python-dotenv==0.15.0
 emoji==1.2.0
 aiosmtplib==1.1.4

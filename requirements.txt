@@ -1,0 +1,14 @@
+aiogram==2.12
+aiohttp==3.7.4.post0
+fastapi==0.63.0
+uvicorn==0.13.4
+python-dotenv==0.15.0
+emoji==1.2.0
+aiosmtplib==1.1.4
+
+SQLAlchemy==1.4.2
+asyncpg==0.22.0
+alembic==1.5.4
+psycopg2-binary==2.8.6
+
+jsonpath-ng==1.5.2

@@ -1,0 +1,4 @@
+
+
+class MinDepositValueEx(Exception):
+    pass

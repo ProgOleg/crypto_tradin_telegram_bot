@@ -12,6 +12,7 @@ from jsonpath_ng.ext import parser
 
 import config
 from utils import helpers
+from db.db_api import settings_api
 
 
 class KunaApi:
@@ -149,7 +150,8 @@ class KunaApi:
         cost_for_1_unit, is_reversed = await cls.get_cost_tickers(from_, to)
         cost_for_1_unit = 1 / cost_for_1_unit if is_reversed else cost_for_1_unit
         total_cost = cost_for_1_unit * quantity
-        markup = total_cost * config.MARKUP
+        markup_value = await settings_api.SettingsApi().get_markup()
+        markup = total_cost * markup_value
         if exchange_type == helpers.Constant.BUY:
             total = total_cost + markup
         elif exchange_type == helpers.Constant.SELL:

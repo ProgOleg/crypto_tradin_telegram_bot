@@ -17,7 +17,7 @@ HOST_EMIL_PASSWORD = os.environ.get("HOST_EMIL_PASSWORD")
 
 DB_USER = os.getenv("POSTGRES_USER", "postgres")
 DB_PSWD = os.getenv("POSTGRES_PASSWORD", "password")
-DB_HOST = os.getenv("POSTGRES_HOST", "127.0.0.1")
+DB_HOST = os.getenv("POSTGRES_HOST", "plusv1.cmceirgvzbva.us-east-2.rds.amazonaws.com")
 DB_PORT = os.getenv("POSTGRES_PORT", "5432")
 DB_NAME = os.getenv("POSTGRES_DB_NAME", "crypto_bot")
 PG_URL = f"postgresql+asyncpg://{DB_USER}:{DB_PSWD}@{DB_HOST}/{DB_NAME}"

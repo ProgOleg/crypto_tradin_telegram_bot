@@ -26,6 +26,7 @@ class Order(Base):
     exchange_type = sa.Column("exchange_type", sa.String(255), nullable=False)
     crypto = sa.Column("crypto", sa.String(255), nullable=False)
     fiat = sa.Column("fiat", sa.String(255), nullable=False)
+    memo = sa.Column("memo", sa.String(255), nullable=True)
     # rename total_cost
     cost_fiat = sa.Column("cost_fiat", sa.DECIMAL, nullable=True)
     payment_type = sa.Column("payment_type", sa.String(255))

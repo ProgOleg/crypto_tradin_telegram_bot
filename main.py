@@ -4,9 +4,10 @@ import decimal
 
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from aiogram.contrib.fsm_storage.redis import RedisStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
-from config import T_TOKEN, T_EXPIRE
+from config import T_TOKEN, T_EXPIRE, REDIS_HOST
 
 from utils import helpers, buttons, validators, exceptions as exep, api, helper_send_email
 from db.db_api import (
@@ -18,7 +19,8 @@ from db.db_api import (
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=T_TOKEN)
-storage = MemoryStorage()
+# storage = MemoryStorage()
+storage = RedisStorage(host=REDIS_HOST)
 dp = Dispatcher(bot, storage=storage)
 
 
@@ -32,6 +34,7 @@ class ExchangeStorage(StatesGroup):
     payment_type = State()
     quantity = State()
     bill = State()
+    memo = State()
     _message_id = State()
     _last_bot_message = State()
     _order_id = State()
@@ -54,18 +57,23 @@ async def process_start_command(message: types.Message, state):
     )
     await state.finish()
     text = """
-Вас приветствует Plus bot!
-Обмен валюты на карту производится в автоматическом режиме и может занимать
-от 5 до 30 минут в зависимости от выбранной валюты,
-количества подтверждений, загруженности сети.
+<strong>Вас приветствует сервис для обмена валюты - Plus bot!</strong>
+Обмен производится мгновенно в автоматическом режиме. 
+Время обмена зависит от выбранной валюты , количества подтверждений и загруженности сети.
         """
-    await bot.send_message(message.from_user.id, text=text, reply_markup=buttons.StartScreen.buttons)
+    await bot.send_message(
+        chat_id=message.from_user.id,
+        text=text,
+        reply_markup=buttons.StartScreen.buttons,
+        parse_mode=types.ParseMode.HTML
+    )
 
 
 @dp.message_handler(lambda message: message.text, state="*")
 async def message_router(message, state):
     _value_handler0_keys = {"crypto", "exchange_type", "fiat", "payment_type"}
-    _value_handler1_keys = {"crypto", "exchange_type", "fiat", "payment_type", "quantity"}
+    _value_handler_0_1_keys = {"crypto", "exchange_type", "fiat", "payment_type", "quantity"}
+    _value_handler1_keys = {"crypto", "exchange_type", "fiat", "payment_type", "quantity", "bill"}
     _value_handler2_keys = {"crypto", "exchange_type", "fiat", "payment_type", "quantity", "bill", "total_cost", "email"}
 
     state_data = await state.get_data()
@@ -82,9 +90,21 @@ async def message_router(message, state):
     elif msg_text in ["ℹ️ Поддержка"]:
         return await processing(ProcessSupport)
 
+    elif msg_text in ["ℹ️ Информация"]:
+        return await processing(ProcessInfo)
+
+    elif msg_text in ["💎 Мои обмены"]:
+        return await processing(ProcessExchangeHistory)
+
+    elif msg_text in ["🗣 Язык"]:
+        return await processing(ProcessLanguages)
+
     elif helpers.state_machine_handler(_value_handler0_keys, state_data):
         # accepting bill
         return await processing(ExchangeValueHandler)
+
+    elif helpers.state_machine_handler(_value_handler_0_1_keys, state_data):
+        return await processing()
 
     elif helpers.state_machine_handler(_value_handler1_keys, state_data):
         # accepting email
@@ -151,25 +171,59 @@ async def query_router(query, state):
 class ProcessSupport(helpers.BaseHandler):
 
     TEXT = """
-ℹ️ Поддержка 
-Если у вас возникли вопросы по вашему обмену или желаете обсудить индивидуальные условия просьба отписать нам на почту xplus_crypto@protonmail.com
-    
+ℹ️ Поддержка
+
+Если у Вас возникли вопросы по обмену, свяжитесь с нашим оператором @DanilPsol.
+Если желаете обсудить индивидуальные условия, просьба написать нам на почту xplus_crypto@protonmail.com
     """
 
-    def handler(self, *args, **kwargs):
-        self.send_msg()
+    async def handler(self, *args, **kwargs):
+        await self.send_msg()
+
+
+class ProcessInfo(helpers.BaseHandler):
+    TEXT = """
+Plus bot - бот для быстрого, безопасного и анонимного обмена криптовалюты на валюту Вашей страны, либо на другую криптовалюту. Самые низкие комиссии и актуальный курс по криптовалютным парам.  Поддержка в реальном режиме 24/7!
+    """
+
+    async def handler(self, *args, **kwargs):
+        await self.send_msg()
+
+
+class ProcessLanguages(helpers.BaseHandler):
+
+    TEXT = """
+🗣 Язык
+
+Раздел находится в процессе разработки.
+    """
+
+    async def handler(self, *args, **kwargs):
+        await self.send_msg()
+
+
+class ProcessExchangeHistory(helpers.BaseHandler):
+    TEXT = """
+💎 Мои обмены
+
+Раздел находится в процессе разработки.
+        """
+
+    async def handler(self, *args, **kwargs):
+        await self.send_msg()
 
 
 class NewExchange(helpers.BaseHandler):
     TEXT = """ 
 🔄 Новый обмен
-    
 Внимание!
-Вне зависимости от того, в какую сторону будет изменен курс обмена, его окончательная фиксация будет проведена после фактического зачисления средств на наш кошелек.
-    """
+Вне зависимости от того, в какую сторону будет изменен курс обмена, его окончательная фиксация будет произведена в момент фактического зачисления средств на наш кошелек.
+"""
     BUTTONS = buttons.MyExchangeStep1.buttons
 
     async def handler(self, *args, **kwargs):
+        if hasattr(self, "_message_id") and not isinstance(self.msg_query, types.CallbackQuery):
+            await self.delete_msg_update_state_last_bot_message(self._message_id)
         await self.state.finish()
         await ExchangeStorage.exchange_type.set()
         await self.edit_msg_or_send()
@@ -201,7 +255,8 @@ class Exchange2Step(helpers.BaseHandler):
 
     async def handler(self, *args, **kwargs):
         if self.query_path == "exchange_step2":
-            await self.update_state_data(quantity=None)
+            if self.state_data.get("quantity"):
+                await self.reset_state_data("quantity")
         else:
             await self.update_state_data(crypto=self.data_query)
         self.BUTTONS = buttons.Fiat.get_button_separate_coin(self.crypto)
@@ -220,10 +275,22 @@ class ExchangeSelectPaymentStep(helpers.BaseHandler):
         if not self.query_path == "exchange_step3":
             await self.update_state_data(fiat=self.data_query)
         await self.update_state_data(_message_id=self.msg_id)
-        self.BUTTONS = buttons.PaymentType().get_payment_type_buttons(
-            self.query_path, self.fiat, self.exchange_type
-        )
-        await self.edit_msg()
+        if self.fiat in self.FIAT and self.exchange_type == self.SELL and self.fiat == self.UAH:
+            self.BUTTONS = buttons.PaymentType().get_payment_type_buttons(
+                self.query_path, self.fiat, self.exchange_type
+            )
+            await self.edit_msg()
+        else:
+            # await self.update_state_data()
+            data_query = buttons.PaymentType.BILL if self.fiat not in self.FIAT else buttons.PaymentType.VISA_KEY
+            inst = Exchange3Step(
+                bot=self.bot,
+                msg_query=self.msg_query,
+                state=self.state,
+                state_data=self.state_data,
+                data_query=data_query
+            )
+            return await inst.handler()
 
 
 class Exchange3Step(helpers.BaseHandler):
@@ -246,8 +313,8 @@ class Exchange34Step(helpers.BaseHandler):
     TEXT = """
 🔄 Новый обмен
 
-<b>{event}:</b> {crypto} на {fiat}
-<b>Способ оплаты:</b> {optional_msg_up}
+<b>{event}:</b> {crypto} за {fiat}
+<b>Способ оплаты:</b> {payment_rus_descr}
 <b>Количесвто {crypto}:</b> {quantity}
 <b>Стоимость:</b> {total_cost} {fiat}
 
@@ -257,26 +324,15 @@ class Exchange34Step(helpers.BaseHandler):
 
     async def handler(self, *args, **kwargs):
         self.format_msg_text(
-            event=self.event(True, True), crypto=self.crypto.upper(),
+            event=self.event(False, False), crypto=self.crypto.upper(),
             fiat=self.fiat.upper(), optional_msg_up=self.payment_type_optional_msg.upper(),
             quantity=self.quantity, total_cost=await self._total_cost,
-            optional_msg=self.payment_type_optional_msg
+            optional_msg=self.payment_type_optional_msg, payment_rus_descr=self.payment_rus_descr()
         )
         await self.edit_msg()
 
 
 class ExchangeValueHandler(helpers.BaseHandler):
-    TEXT = """
-🔄 Новый обмен
-
-<b>{exchange_event}:</b> {crypto.upper()} на {fiat.upper()}
-<b>Способ оплаты:</b> {buttons.PaymentType._collections.get(payment_type, [])[0]}
-<b>Количесвто {crypto}:</b> {quantity}
-<b>Стоимость:</b> {total_cost} {fiat.upper()}
-
-<strong>Введите {optional_msg} куда хотите получить оплату</strong>
-    
-    """
 
     async def handler(self, *args, **kwargs):
         quantity = self.msg_data.replace(",", ".")
@@ -308,8 +364,8 @@ class ExchangeValueHandler1(helpers.BaseHandler):
 <strong>Проверьте правильность введенных данных:</strong>
 
 <b>Заявка:</b> №-{order_id}
-<b>{exchange_event}:</b> {crypto} на {fiat}
-<b>Способ оплаты:</b> {payment_type_optional_msg}
+<b>{exchange_event}:</b> {crypto} за {fiat}
+<b>Способ оплаты:</b> {payment_rus_descr}
 <b>Время:</b> {msg_date}
 <b>Количесвто {crypto}:</b> {quantity}
 <b>{payment_type_optional_msg_cap}:</b> {msg}
@@ -318,11 +374,9 @@ class ExchangeValueHandler1(helpers.BaseHandler):
 {optional_msg}
 
 По факту совершения оплаты нажмите на кнопку - "Оплачено".
-Время ожидание оплаты - {expire}мин., в случае отсутсвия перевода
-заявка анулируется!
-
+Время ожидание оплаты - {expire} мин., в случае отсутствия перевода
+заявка аннулируется!
 Заявка будет активна до {active_to}.
-
 Для получения реквизитов на почту - введте почту.
          """
 
@@ -336,7 +390,7 @@ class ExchangeValueHandler1(helpers.BaseHandler):
         order_data["cost_fiat"] = order_data.pop("total_cost")
         order_id = await order_api.OrderAPI().create_order({**order_data, **{"user_id": self.msg_user_id}})
         payment_url = None
-        if self.fiat in [helpers.Constant.USD, helpers.Constant.RUB, helpers.Constant.UAH]:
+        if self.fiat in [self.USD, self.RUB, self.UAH] and self.exchange_type == self.BUY:
             payment_url = await api.KunaApi().get_payment_url(self.fiat, float(total_cost))
             optional_msg = """
 Сумма для оплаты привышает лимит автоматической оплаты. 
@@ -351,10 +405,11 @@ class ExchangeValueHandler1(helpers.BaseHandler):
             msg_date=self.msg_date, quantity=self.quantity,
             payment_type_optional_msg_cap=self.payment_type_optional_msg.capitalize(),
             msg=self.msg_data, total_cost=total_cost, optional_msg=optional_msg,
-            expire=T_EXPIRE, active_to=str(self.msg_date + datetime.timedelta(minutes=T_EXPIRE))
+            expire=T_EXPIRE, active_to=str(self.msg_date + datetime.timedelta(minutes=T_EXPIRE)),
+            payment_rus_descr=self.payment_rus_descr()
         )
         await bot.delete_message(chat_id=self.chat_id, message_id=self.msg_id)
-        await self.edit_msg(self._message_id)
+        await self.edit_msg(self._message_id, save=False)
         if hasattr(self, "last_bot_message"):
             await bot.delete_message(chat_id=self.chat_id, message_id=self.last_bot_message)
 
@@ -390,17 +445,17 @@ async def admin_msg_telegram_new_order_approved(order_id: str, order_is_expired,
     admins = await admin_api.AdminApi().get_admin()
     text = f"""
 <b>Заявка:</b> №-{order_id}
-<b>{exchange_event}:</b> {order_data.crypto.upper()} на {order_data.fiat.upper()}
+<b>{exchange_event.capitalize()}:</b> {order_data.crypto.upper()} за {order_data.fiat.upper()}
 <b>Способ оплаты:</b> {buttons.PaymentType._collections.get(order_data.payment_type, [])[0]}
-<b>Время:</b> {str(order_data.cr_date)}
+<b>Время:</b> {order_data.cr_date.strftime("%Y-%m-%d %H:%M:%S")}
 <b>Количесвто {order_data.crypto.upper()}:</b> {order_data.quantity}
 <b>{order_data.payment_type}:</b> {order_data.bill}
 <b>Стоимость:</b> {order_data.cost_fiat} {order_data.fiat.upper()}
 <b>Оплата просрочена:</b> {order_is_expired} {time_expired or ''}
 
 <strong>Пользователь</strong>
-<b>Дата регистрации:</b> {user_data.registration_date}
-<b>Язык:</b> {user_data.language.upper()}
+<b>Дата регистрации:</b> {user_data.registration_date.strftime("%Y-%m-%d %H:%M:%S")}
+<b>Язык:</b> {user_data.language.upper() if user_data.language else 'None'}
 <b>Username:</b> @{user_data.username}
     """
     for data in admins:
@@ -433,7 +488,7 @@ class Exchange5Step(helpers.BaseHandler):
 подтверждения платежа статус обновится автоматически.
 
 Время ожидания зависит от загруженности сети.
-При возникновении вопросов по вашей заявке
+При возникновении вопросов по Вашей заявке
 просьба обратится в нашу службу поддержки.
 
 <strong>Спасибо что выбрали наш сервис!</strong>
@@ -443,19 +498,33 @@ class Exchange5Step(helpers.BaseHandler):
             self.TEXT = """
 <strong>{expire} минут с момента создания вашей заявки истекли 😕</strong>
 <b>Заявка:</b> №-{order_id}
-В случае если вы оплатили, но срок заявки истек - обратитесь
+В случае если Вы произвели оплату, но срок заявки истек - обратитесь
 в нашу службу поддержки нажав на кнопку "ℹ️ Поддержка".
+
+<strong>Спасибо что выбрали наш сервис!</strong>
             """
             self.format_msg_text(expire=T_EXPIRE, order_id=self.data_query)
-        await self.edit_msg()
+        await self.edit_msg(save=False)
 
 
 async def admin_success_order(callback_query: types.CallbackQuery, state: FSMContext):
     order_id = helpers.get_val_query(callback_query.data)
     order_data = await order_api.OrderAPI().retrieve(int(order_id))
+    if order_data.approve:
+        return
+    exchange_type_descr = helpers.Constant().get_exchange_type_descriptor(order_data.exchange_type, verb=False)
+    payment_type_descr = buttons.PaymentType.DESCRIPTOR_VALUE.get(
+            order_data.payment_type) if helpers.Constant.SELL else "номер кошелька"
     text = f"""
-<b>Заявка:</b> №-{order_id}
-Заявка обработана, ожидание зачисление средств на ваш счет
+<strong>Обмен успешно выполнен!</strong>
+<b>Заявка</b> №-{order_id} обработана, ожидайте зачисление средств на Ваш счет.
+
+<b>{exchange_type_descr}:</b> {order_data.crypto.upper()} за {order_data.fiat.upper()}
+<b>Способ оплаты:</b>{order_data.payment_type}
+<b>Время:</b>{callback_query.message.date.strftime("%Y-%m-%d %H:%M:%S")}
+<b>Количесвто {order_data.crypto.upper()}:</b> {order_data.quantity}
+<b>{payment_type_descr.capitalize()}:</b>{order_data.bill}
+<b>Стоимость:</b>{order_data.cost_fiat} {order_data.fiat.upper()}
     """
     await order_api.OrderAPI().set_success(int(order_id))
     await bot.send_message(
@@ -463,6 +532,7 @@ async def admin_success_order(callback_query: types.CallbackQuery, state: FSMCon
         text=text,
         parse_mode=types.ParseMode.HTML
     )
+    await order_api.OrderAPI().update(data={"approve": True}, pk=int(order_id))
 
 if __name__ == '__main__':
-    executor.start_polling(dp, skip_updates=True, on_shutdown=shutdown)
+    executor.start_polling(dp, skip_updates=False, on_shutdown=shutdown)

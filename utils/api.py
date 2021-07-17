@@ -147,6 +147,7 @@ class KunaApi:
             exchange_type: str
     ):
         # количество * курс(uah) *
+        quantity = decimal.Decimal(quantity)
         cost_for_1_unit, is_reversed = await cls.get_cost_tickers(from_, to)
         cost_for_1_unit = 1 / cost_for_1_unit if is_reversed else cost_for_1_unit
         total_cost = cost_for_1_unit * quantity

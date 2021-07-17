@@ -1,8 +1,10 @@
 from urllib.parse import urlparse, parse_qs
 from typing import Union, Optional
+import decimal
 
 from aiogram import types, Bot
 from aiogram.dispatcher import FSMContext
+from aiogram.utils import exceptions as exe
 
 from utils import api, buttons
 
@@ -68,6 +70,13 @@ class Constant:
     UAH = "uah"
     RUB = "rub"
     USD = "usd"
+
+    FIAT = {UAH, RUB, USD}
+
+    QUIWI = "qiwi"
+    VISA = "visa/mastercard"
+    MOBILE = "mobile"
+    BILL = "bill"
 
     @classmethod
     def get_exchange_type_descriptor(
@@ -141,25 +150,31 @@ class BaseHandler(Constant):
         else:
             await self.send_msg()
 
-    async def edit_msg(self, msg_id: int = None):
-        await self.bot.edit_message_text(
+    async def edit_msg(self, msg_id: int = None, save: bool = True):
+        msg = await self.bot.edit_message_text(
             chat_id=self.chat_id,
             message_id=msg_id or self.msg_id,
             text=self.text or self.TEXT,
             reply_markup=self.BUTTONS,
             parse_mode=types.ParseMode.HTML
         )
+        if save:
+            await self.update_state_data(_message_id=msg.message_id)
 
     async def send_msg(self):
-        await self.bot.send_message(
+        msg = await self.bot.send_message(
             chat_id=self.chat_id,
             text=self.text or self.TEXT,
             parse_mode=types.ParseMode.HTML,
             reply_markup=self.BUTTONS
         )
+        await self.update_state_data(_message_id=msg.message_id)
 
-    async def delete_msg_update_state_last_bot_message(self):
-        await self.bot.delete_message(chat_id=self.chat_id, message_id=self.msg_id)
+    async def delete_msg_update_state_last_bot_message(self, msg_id=None):
+        try:
+            await self.bot.delete_message(chat_id=self.chat_id, message_id=msg_id or self.msg_id)
+        except exe.MessageCantBeDeleted as ex:
+            return
         await self.update_state_data(_last_bot_message=None)
 
     async def message_delete_processing(self):
@@ -178,10 +193,17 @@ class BaseHandler(Constant):
         self.text = self.TEXT.format(**kwargs)
 
     async def update_state_data(self, **kwargs):
-        await self.state.update_data(**kwargs)
         for key, val in kwargs.items():
+            if isinstance(val, decimal.Decimal):
+                val = str(val)
+                kwargs[key] = str(val)
             self.state_data.update({key: val})
             setattr(self, key, val)
+        await self.state.update_data(**kwargs)
+
+    async def reset_state_data(self, pop_key: str):
+        self.state_data.pop(pop_key)
+        await self.state.update_data(self.state_data)
 
     def event(self, lower_: bool = True, verb: bool = True):
         event = self.exchange_type if hasattr(self, "exchange_type") else self.data_query
@@ -196,7 +218,8 @@ class BaseHandler(Constant):
     @property
     def payment_type_optional_msg(self):
         return buttons.PaymentType.DESCRIPTOR_VALUE.get(
-            self.payment_type) if Constant.SELL else "номер кошелька"
+            self.payment_type if self.exchange_type == self.SELL else self.BILL
+        )
 
     @property
     def validator(self):
@@ -205,4 +228,11 @@ class BaseHandler(Constant):
         else:
             return buttons.PaymentType.VALIDATORS.get(buttons.PaymentType.BILL)
 
-
+    def payment_rus_descr(self):
+        _values = {
+            self.QUIWI: self.QUIWI.upper(),
+            self.BILL: "Кошелек",
+            self.VISA: self.VISA.upper().upper(),
+            self.MOBILE: "Пополнение мобильного"
+        }
+        return _values.get(self.payment_type, "")

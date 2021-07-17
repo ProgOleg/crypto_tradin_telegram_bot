@@ -48,7 +48,7 @@ def exchange_step_3():
 
 def exchange_step_3_4(order_id, url: typing.Optional[str] = None):
     # back = InlineKeyboardButton("↩️ Назад", callback_data="exchange_step3_4")
-    payment_url = InlineKeyboardButton("Ссылка на оплату", url=url)
+    payment_url = InlineKeyboardButton("💸 Ссылка на оплату", url=url)
     paid = InlineKeyboardButton("✅ Оплачено", callback_data=f"exchange_step5?value={order_id}")
     if not url:
         buttons = InlineKeyboardMarkup().row(paid)

@@ -66,12 +66,16 @@ class Constant:
     XRP = "xrp"
     TRX = "trx"
     USDT = "usdt"
+    BNB = "bnb"
+    XLM = "xlm"
+    XEM = "xem"
 
     UAH = "uah"
     RUB = "rub"
     USD = "usd"
 
     FIAT = {UAH, RUB, USD}
+    MEMO_COINS = {XRP, BNB, XLM, XEM}
 
     QUIWI = "qiwi"
     VISA = "visa/mastercard"
@@ -94,6 +98,13 @@ class Constant:
 
 
 class BaseHandler(Constant):
+    __slots__ = (
+        "fiat", "crypto", "exchange_type", "payment_type",
+        "quantity", "bill", "memo", "_message_id", "_last_bot_message",
+        "_order_id", "cost_fiat", "email", "bot",
+        "msg_query", "state_data", "state"
+
+    )
     CALL_BACK_QUERY = "CALL_BACK_QUERY"
     MESSAGE = "MESSAGE"
 

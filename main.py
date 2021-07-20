@@ -3,7 +3,6 @@ import datetime
 import decimal
 
 from aiogram import Bot, Dispatcher, executor, types
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.fsm_storage.redis import RedisStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
@@ -74,7 +73,9 @@ async def message_router(message, state):
     _value_handler0_keys = {"crypto", "exchange_type", "fiat", "payment_type"}
     _value_handler_0_1_keys = {"crypto", "exchange_type", "fiat", "payment_type", "quantity"}
     _value_handler1_keys = {"crypto", "exchange_type", "fiat", "payment_type", "quantity", "bill"}
-    _value_handler2_keys = {"crypto", "exchange_type", "fiat", "payment_type", "quantity", "bill", "total_cost", "email"}
+    _value_handler2_keys = {
+        "crypto", "exchange_type", "fiat", "payment_type", "quantity", "bill", "total_cost", "email"
+    }
 
     state_data = await state.get_data()
     msg_text = message.text
@@ -104,7 +105,7 @@ async def message_router(message, state):
         return await processing(ExchangeValueHandler)
 
     elif helpers.state_machine_handler(_value_handler_0_1_keys, state_data):
-        return await processing()
+        return await processing(ExchangeValueHandler01)
 
     elif helpers.state_machine_handler(_value_handler1_keys, state_data):
         # accepting email
@@ -260,7 +261,7 @@ class Exchange2Step(helpers.BaseHandler):
         else:
             await self.update_state_data(crypto=self.data_query)
         self.BUTTONS = buttons.Fiat.get_button_separate_coin(self.crypto)
-        self.format_msg_text(event=self.event(), crypto=self.crypto)
+        self.format_msg_text(event=self.event(), crypto=self.crypto.upper())
         await self.edit_msg()
 
 
@@ -304,7 +305,7 @@ class Exchange3Step(helpers.BaseHandler):
     async def handler(self, *args, **kwargs):
         if not self.query_path == "exchange_step4":
             await self.update_state_data(payment_type=self.data_query)
-        self.format_msg_text(crypto=self.crypto, event=self.event())
+        self.format_msg_text(crypto=self.crypto.upper(), event=self.event())
         await self.update_state_data(_message_id=self.msg_id)
         await self.edit_msg()
 
@@ -356,6 +357,39 @@ class ExchangeValueHandler(helpers.BaseHandler):
             await inst.handler()
 
 
+class ExchangeValueHandler01(helpers.BaseHandler):
+
+    async def handler(self, *args, **kwargs):
+        if not self.validator(self.msg_data):
+            self.TEXT = f"Невалидный {self.payment_type_optional_msg}. '{self.msg_data}' - невалидное значениие!"
+            return await self.message_delete_processing()
+        await self.update_state_data(memo=self.msg_data)
+        if (self.exchange_type == self.BUY and self.crypto in self.MEMO_COINS) or (
+                self.exchange_type == self.SELL and self.fiat in self.MEMO_COINS):
+            self.TEXT = """
+🔄 Новый обмен
+ 
+Для {fiat} необходимо ввести MEMO.
+            """
+            self.format_msg_text(fiat=self.fiat.upper())
+            await bot.delete_message(chat_id=self.chat_id, message_id=self.msg_id)
+            await self.edit_msg(self._message_id, save=False)
+            if hasattr(self, "last_bot_message"):
+                await bot.delete_message(chat_id=self.chat_id, message_id=self.last_bot_message)
+        else:
+            await self.update_state_data(memo=None)
+            # bot, message, state, state_data, msg_text, data_query=msg_text
+            inst = ExchangeValueHandler1(
+                self.bot,
+                self.msg_query,
+                self.state,
+                self.state_data,
+                self.msg_data,
+                data_query=self.data_query
+            )
+            return await inst.handler()
+
+
 class ExchangeValueHandler1(helpers.BaseHandler):
 
     TEXT = """
@@ -368,24 +402,29 @@ class ExchangeValueHandler1(helpers.BaseHandler):
 <b>Способ оплаты:</b> {payment_rus_descr}
 <b>Время:</b> {msg_date}
 <b>Количесвто {crypto}:</b> {quantity}
-<b>{payment_type_optional_msg_cap}:</b> {msg}
 <b>Стоимость:</b> {total_cost} {fiat}
+<b>{payment_type_optional_msg_cap}:</b> {msg}
+{optional_msg_memo}
 
 {optional_msg}
 
 По факту совершения оплаты нажмите на кнопку - "Оплачено".
 Время ожидание оплаты - {expire} мин., в случае отсутствия перевода
 заявка аннулируется!
+
 Заявка будет активна до {active_to}.
 Для получения реквизитов на почту - введте почту.
          """
 
     async def handler(self, *args, **kwargs):
-        if not self.validator(self.msg_data):
-            self.TEXT = f"Невалидный {self.payment_type_optional_msg}. '{self.msg_data}' - невалидное значениие!"
-            return await self.message_delete_processing()
+        if not hasattr(self, "memo"):
+            if not validators.memo_validator(self.msg_data):
+                self.TEXT = f"Невалидный MEMO. '{self.msg_data}' - невалидное значениие!"
+                return await self.message_delete_processing()
+            else:
+                await self.update_state_data(memo=self.msg_data)
         total_cost = await self._total_cost
-        await self.update_state_data(total_cost=total_cost, bill=self.msg_data)
+        await self.update_state_data(total_cost=total_cost)
         order_data = {k: v for k, v in self.state_data.items() if k not in ("_message_id", "_last_bot_message")}
         order_data["cost_fiat"] = order_data.pop("total_cost")
         order_id = await order_api.OrderAPI().create_order({**order_data, **{"user_id": self.msg_user_id}})
@@ -397,6 +436,9 @@ class ExchangeValueHandler1(helpers.BaseHandler):
 Ваша заявка будет обрабатываться в индивидуальном порядке.""" if not payment_url else ""
         else:
             optional_msg = "<b>Номер кошелька:</b> Номер кошелька Виталика для {fiat}"
+        optional_msg_memo = None
+        if hasattr(self, "memo") and getattr(self, "memo") is not None:
+            optional_msg_memo = f"<b>MEMO:</b> {self.memo}"
         self.BUTTONS = buttons.exchange_step_3_4(order_id, payment_url)
         self.format_msg_text(
             order_id=order_id, exchange_event=self.event(False, False), fiat=self.fiat.upper(),
@@ -406,7 +448,7 @@ class ExchangeValueHandler1(helpers.BaseHandler):
             payment_type_optional_msg_cap=self.payment_type_optional_msg.capitalize(),
             msg=self.msg_data, total_cost=total_cost, optional_msg=optional_msg,
             expire=T_EXPIRE, active_to=str(self.msg_date + datetime.timedelta(minutes=T_EXPIRE)),
-            payment_rus_descr=self.payment_rus_descr()
+            payment_rus_descr=self.payment_rus_descr(), optional_msg_memo=optional_msg_memo or ""
         )
         await bot.delete_message(chat_id=self.chat_id, message_id=self.msg_id)
         await self.edit_msg(self._message_id, save=False)
@@ -449,9 +491,10 @@ async def admin_msg_telegram_new_order_approved(order_id: str, order_is_expired,
 <b>Способ оплаты:</b> {buttons.PaymentType._collections.get(order_data.payment_type, [])[0]}
 <b>Время:</b> {order_data.cr_date.strftime("%Y-%m-%d %H:%M:%S")}
 <b>Количесвто {order_data.crypto.upper()}:</b> {order_data.quantity}
-<b>{order_data.payment_type}:</b> {order_data.bill}
 <b>Стоимость:</b> {order_data.cost_fiat} {order_data.fiat.upper()}
 <b>Оплата просрочена:</b> {order_is_expired} {time_expired or ''}
+<b>{order_data.payment_type.upper()}:</b> {order_data.bill}
+{f'<b>MEMO:</b> {order_data.memo}' if order_data.memo else ''}
 
 <strong>Пользователь</strong>
 <b>Дата регистрации:</b> {user_data.registration_date.strftime("%Y-%m-%d %H:%M:%S")}

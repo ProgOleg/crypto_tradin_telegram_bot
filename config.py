@@ -39,3 +39,4 @@ KUNA_SECRET_KEY = os.getenv("KUNA_SECRET_KEY", "")
 KUNA_PUBLIC_KEY = os.getenv("KUNA_PUBLIC_KEY", "")
 
 MARKUP = decimal.Decimal("0.03")
+

@@ -17,12 +17,17 @@ def phone_validator(value: str) -> bool:
 
 def qiwi_validator(value: str) -> bool:
     # Not implemented yet
-    return True
+    return True if len(value) != 0 else False
 
 
 def bill_validator(value: str) -> bool:
     # Not implemented yet
-    return True
+    return True if len(value) != 0 else False
+
+
+def memo_validator(value: str) -> bool:
+    # Not implemented yet
+    return True if len(value) != 0 else False
 
 
 def bank_card_validator(value: str) -> bool:

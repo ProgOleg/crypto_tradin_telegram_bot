@@ -53,7 +53,7 @@ def exchange_step_3_4(order_id, url: typing.Optional[str] = None):
     if not url:
         buttons = InlineKeyboardMarkup().row(paid)
     else:
-        buttons = InlineKeyboardMarkup().row(paid).row(payment_url)
+        buttons = InlineKeyboardMarkup().row(payment_url).row(paid)
 
     return buttons
 

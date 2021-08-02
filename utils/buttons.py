@@ -82,7 +82,8 @@ class ButtonsConst:
     LTC = "ltc"
     XRP = "xrp"
     TRX = "trx"
-    USDT = "usdt"
+    USDT_TRC20 = "usdt(trc20)"
+    USDT_ERC20 = "usdt(erc20)"
 
     USDC = "usdc"
     BCH = "bch"
@@ -97,19 +98,20 @@ class ButtonsConst:
     USD = "usd"
 
     CONST_RELATIONS = {
-        BTC: {UAH, USDT, USDC, RUB, USD, ETH},
-        ETH: {UAH, BTC, USDT, RUB},
-        LTC: {UAH, USDT},
-        XRP: {UAH, USDT, RUB},
-        TRX: {UAH, USDT},
-        USDT: {UAH, BTC, ETH, RUB, USD, XRP, LTC, TRX, USDC, BCH, XLM, DASH, TON, SHIB, DOGE},
-        USDC: {UAH, BTC, USDT},
-        BCH: {UAH, USDT},
-        XLM: {UAH, USDT},
-        DASH: {UAH, USDT},
-        TON: {USDT},
-        SHIB: {UAH, USDT},
-        DOGE: {UAH, USDT}
+        BTC: {UAH, USDT_TRC20, USDT_ERC20, USDC, RUB, USD, ETH},
+        ETH: {UAH, BTC, USDT_TRC20, USDT_ERC20, RUB},
+        LTC: {UAH, USDT_TRC20, USDT_ERC20},
+        XRP: {UAH, USDT_TRC20, USDT_ERC20, RUB},
+        USDT_TRC20: {UAH, BTC, ETH, RUB, USD, XRP, LTC, TRX, USDC, BCH, XLM, DASH, TON, SHIB, DOGE},
+        USDT_ERC20: {UAH, BTC, ETH, RUB, USD, XRP, LTC, TRX, USDC, BCH, XLM, DASH, TON, SHIB, DOGE},
+        TRX: {UAH, USDT_TRC20, USDT_ERC20},
+        USDC: {UAH, BTC, USDT_TRC20, USDT_ERC20},
+        BCH: {UAH, USDT_TRC20, USDT_ERC20},
+        XLM: {UAH, USDT_TRC20, USDT_ERC20},
+        DASH: {UAH, USDT_TRC20, USDT_ERC20},
+        TON: {USDT_TRC20, USDT_ERC20},
+        SHIB: {UAH, USDT_TRC20, USDT_ERC20},
+        DOGE: {UAH, USDT_TRC20, USDT_ERC20}
     }
 
     BACK_BUTTON_VALUE = ""
@@ -161,7 +163,7 @@ class PaymentType(ButtonsConst):
     def get_payment_type_buttons(cls, query_path, fiat, exchange_type):
         if query_path == "fiat" and fiat in [cls.UAH, cls.RUB, cls.USD]:
             if fiat == cls.RUB:
-                but = ["qiwi"]
+                but = ["qiwi", "visa"]
             elif exchange_type == cls.SELL and fiat == cls.UAH:
                 but = ["mobile", "visa"]
             else:

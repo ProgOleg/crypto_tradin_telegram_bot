@@ -85,3 +85,5 @@ class EmailAPI(object):
             await self.__smtp.quit()
         except Exception as e:
             print(f"SMTP server quit fail: {e}")
+
+

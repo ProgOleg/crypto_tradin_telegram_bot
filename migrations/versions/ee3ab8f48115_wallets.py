@@ -19,7 +19,7 @@ depends_on = None
 def upgrade():
     op.create_table(
         'e_wallets',
-        sa.Column('identifier', sa.String(length=10), nullable=False),
+        sa.Column('identifier', sa.String(length=20), nullable=False),
         sa.Column('wallet', sa.String(length=1024), nullable=False),
         sa.Column('memo', sa.String(length=1024), nullable=True),
         sa.PrimaryKeyConstraint('identifier'),

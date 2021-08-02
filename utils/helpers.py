@@ -5,8 +5,11 @@ import decimal
 from aiogram import types, Bot
 from aiogram.dispatcher import FSMContext
 from aiogram.utils import exceptions as exe
+from jinja2 import Template
 
 from utils import api, buttons
+
+PAYMENT_TEMPLATE = "./utils/payment_details.html"
 
 
 def format_delta(delta):
@@ -48,7 +51,15 @@ def state_machine_handler(
         ignore_keys: Optional[set] = None,
 ) -> bool:
     _state_data = state_data.copy()
-    default_ignore_keys = {"_last_bot_message", "_message_id", "_order_id", "cost_fiat"}
+    default_ignore_keys = {
+        "_last_bot_message",
+        "_message_id",
+        "_order_id",
+        "cost_fiat",
+        "memo",
+        "_payment_url",
+
+    }
     _state_data_keys = _state_data.keys()
     if ignore_keys:
         [default_ignore_keys.add(val) for val in ignore_keys]
@@ -81,6 +92,7 @@ class Constant:
     VISA = "visa/mastercard"
     MOBILE = "mobile"
     BILL = "bill"
+    VISA_KEY = "visa"
 
     @classmethod
     def get_exchange_type_descriptor(
@@ -102,7 +114,7 @@ class BaseHandler(Constant):
         "fiat", "crypto", "exchange_type", "payment_type",
         "quantity", "bill", "memo", "_message_id", "_last_bot_message",
         "_order_id", "cost_fiat", "email", "bot",
-        "msg_query", "state_data", "state"
+        "msg_query", "state_data", "state", "_payment_url"
 
     )
     CALL_BACK_QUERY = "CALL_BACK_QUERY"
@@ -241,9 +253,16 @@ class BaseHandler(Constant):
 
     def payment_rus_descr(self):
         _values = {
+            self.VISA_KEY: self.VISA.upper(),
             self.QUIWI: self.QUIWI.upper(),
             self.BILL: "Кошелек",
-            self.VISA: self.VISA.upper().upper(),
+            self.VISA: self.VISA.upper(),
             self.MOBILE: "Пополнение мобильного"
         }
         return _values.get(self.payment_type, "")
+
+
+def render_payment_details_template(data: dict):
+    with open(PAYMENT_TEMPLATE, 'r') as file:
+        template = Template(file.read())
+        return template.render(data)

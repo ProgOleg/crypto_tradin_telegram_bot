@@ -56,7 +56,6 @@ class Settings(Base):
 class EWallets(Base):
     __tablename__ = "e_wallets"
 
-    identifier = sa.Column("identifier", sa.String(10), nullable=False, unique=True, primary_key=True)
+    identifier = sa.Column("identifier", sa.String(20), nullable=False, unique=True, primary_key=True)
     wallet = sa.Column("wallet", sa.String(1024), nullable=False)
     memo = sa.Column("memo", sa.String(1024), nullable=True)
-    description = sa.Column("description", sa.String(255), nullable=True)

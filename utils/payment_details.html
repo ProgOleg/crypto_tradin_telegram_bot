@@ -1,0 +1,60 @@
+<h4>Информация о заказе</h4>
+<table style='font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif; border-collapse: collapse; color: #686461;'>
+  <tr>
+    <td>Номер ордера:</td>
+    <td>{{order_id}}</td>
+  </tr>
+    <tr>
+    <td>{{exchange_event}}:</td>
+    <td>{{crypto}} за {{fiat}}</td>
+  </tr>
+    <tr>
+    <td>Способ оплаты:</td>
+    <td>{{payment_rus_descr}}</td>
+  </tr>
+  <tr>
+    <td>Количесвто {{crypto}}:</td>
+    <td>{{quantity}}</td>
+  </tr>
+  <tr>
+    <td>Стоимость:</td>
+    <td>{{total_cost}} {{fiat}}</td>
+  </tr>
+  <tr>
+    <td>{{payment_type_optional_msg_cap}}:</td>
+    <td>{{bill}}</td>
+  </tr>
+  {% if optional_msg_memo %}
+  <tr>
+    <td>MEMO:</td>
+    <td>{{optional_msg_memo}}</td>
+  </tr>
+  {% endif %}
+</table>
+<h4>Информация об оплате</h4>
+  <table style='font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif; border-collapse: collapse; color: #686461;'>
+  {% if payment_url %}
+  <tr>
+    <td>Ссылка на оплату:</td>
+    <td><a href="{{payment_url}}" target="_blank">Оплатить</a></td>
+  </tr>
+  {% endif %}
+    {% if wallet %}
+  <tr>
+    <td>Номер кошелька:</td>
+    <td>{{wallet}}</td>
+  </tr>
+  {% endif %}
+    {% if memo %}
+  <tr>
+    <td>MEMO:</td>
+    <td>{{memo}}</td>
+  </tr>
+  {% endif %}
+    {% if payment_msg %}
+  <tr>
+    <td>Оплата:</td>
+    <td>{{payment_msg}}</td>
+  </tr>
+  {% endif %}
+</table>

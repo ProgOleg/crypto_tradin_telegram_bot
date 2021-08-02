@@ -23,6 +23,8 @@ class KunaApi:
     XRP = "xrp"
     TRX = "trx"
     USDT = "usdt"
+    USDT_TRC20 = "usdt(trc20)"
+    USDT_ERC20 = "usdt(erc20)"
 
     CRYPTO_KEYS = (
         BTC, ETH, LTC, XRP, TRX, USDT
@@ -96,6 +98,8 @@ class KunaApi:
     @classmethod
     async def parse_fees(cls, crypto: str):
         # in the future, get a margin for the withdrawal of the hryvnia!
+        # normalize USDT(ERC20-TRC20) -> USDT
+        crypto = cls.USDT if crypto in (cls.USDT_ERC20, cls.USDT_TRC20) else crypto
         data = await cls._get_fees()
         res = parser.parse(f"$[?(@.currency='{crypto}')]").find(data)
         value = res[0].value
@@ -147,6 +151,8 @@ class KunaApi:
             exchange_type: str
     ):
         # количество * курс(uah) *
+        # normalize USDT(ERC20-TRC20) -> USDT
+        from_, to = (cls.USDT if el in (cls.USDT_ERC20, cls.USDT_TRC20) else el for el in [from_, to])
         quantity = decimal.Decimal(quantity)
         cost_for_1_unit, is_reversed = await cls.get_cost_tickers(from_, to)
         cost_for_1_unit = 1 / cost_for_1_unit if is_reversed else cost_for_1_unit

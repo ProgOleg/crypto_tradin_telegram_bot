@@ -1,18 +1,22 @@
 import logging
 import datetime
 import decimal
+import pathlib
+import string
 
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.contrib.fsm_storage.redis import RedisStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
-from config import T_TOKEN, T_EXPIRE, REDIS_HOST
+from aiogram.utils import exceptions as aiogram_ex
 
+from config import T_TOKEN, T_EXPIRE, REDIS_HOST
 from utils import helpers, buttons, validators, exceptions as exep, api, helper_send_email
 from db.db_api import (
     user_api,
     order_api,
-    admin_api
+    admin_api,
+    e_wallet_api,
 )
 
 
@@ -37,6 +41,7 @@ class ExchangeStorage(StatesGroup):
     _message_id = State()
     _last_bot_message = State()
     _order_id = State()
+    _payment_url = State()
     cost_fiat = State()
     email = State()
 
@@ -74,7 +79,7 @@ async def message_router(message, state):
     _value_handler_0_1_keys = {"crypto", "exchange_type", "fiat", "payment_type", "quantity"}
     _value_handler1_keys = {"crypto", "exchange_type", "fiat", "payment_type", "quantity", "bill"}
     _value_handler2_keys = {
-        "crypto", "exchange_type", "fiat", "payment_type", "quantity", "bill", "total_cost", "email"
+        "crypto", "exchange_type", "fiat", "payment_type", "quantity", "bill", "total_cost"
     }
 
     state_data = await state.get_data()
@@ -217,6 +222,7 @@ class ProcessExchangeHistory(helpers.BaseHandler):
 class NewExchange(helpers.BaseHandler):
     TEXT = """ 
 🔄 Новый обмен
+
 Внимание!
 Вне зависимости от того, в какую сторону будет изменен курс обмена, его окончательная фиксация будет произведена в момент фактического зачисления средств на наш кошелек.
 """
@@ -276,7 +282,7 @@ class ExchangeSelectPaymentStep(helpers.BaseHandler):
         if not self.query_path == "exchange_step3":
             await self.update_state_data(fiat=self.data_query)
         await self.update_state_data(_message_id=self.msg_id)
-        if self.fiat in self.FIAT and self.exchange_type == self.SELL and self.fiat == self.UAH:
+        if self.exchange_type == self.SELL and self.fiat in (self.UAH, self.RUB):
             self.BUTTONS = buttons.PaymentType().get_payment_type_buttons(
                 self.query_path, self.fiat, self.exchange_type
             )
@@ -363,15 +369,16 @@ class ExchangeValueHandler01(helpers.BaseHandler):
         if not self.validator(self.msg_data):
             self.TEXT = f"Невалидный {self.payment_type_optional_msg}. '{self.msg_data}' - невалидное значениие!"
             return await self.message_delete_processing()
-        await self.update_state_data(memo=self.msg_data)
+        await self.update_state_data(bill=self.msg_data)
         if (self.exchange_type == self.BUY and self.crypto in self.MEMO_COINS) or (
                 self.exchange_type == self.SELL and self.fiat in self.MEMO_COINS):
             self.TEXT = """
 🔄 Новый обмен
- 
-Для {fiat} необходимо ввести MEMO.
+
+Для {coin} необходимо ввести MEMO.
             """
-            self.format_msg_text(fiat=self.fiat.upper())
+            coin = self.fiat if self.fiat in self.MEMO_COINS else self.crypto
+            self.format_msg_text(coin=coin.upper())
             await bot.delete_message(chat_id=self.chat_id, message_id=self.msg_id)
             await self.edit_msg(self._message_id, save=False)
             if hasattr(self, "last_bot_message"):
@@ -424,18 +431,28 @@ class ExchangeValueHandler1(helpers.BaseHandler):
             else:
                 await self.update_state_data(memo=self.msg_data)
         total_cost = await self._total_cost
+        await self.update_state_data(cost_fiat=str(total_cost))
         await self.update_state_data(total_cost=total_cost)
-        order_data = {k: v for k, v in self.state_data.items() if k not in ("_message_id", "_last_bot_message")}
-        order_data["cost_fiat"] = order_data.pop("total_cost")
+        order_data = {k: v for k, v in self.state_data.items() if k not in (
+            "_message_id", "_last_bot_message", "_order_id", "total_cost", "_payment_url"
+        )}
+        order_data["cost_fiat"] = order_data.pop("cost_fiat")
         order_id = await order_api.OrderAPI().create_order({**order_data, **{"user_id": self.msg_user_id}})
+        await self.update_state_data(_order_id=order_id)
         payment_url = None
         if self.fiat in [self.USD, self.RUB, self.UAH] and self.exchange_type == self.BUY:
             payment_url = await api.KunaApi().get_payment_url(self.fiat, float(total_cost))
+            await self.update_state_data(_payment_url=payment_url)
             optional_msg = """
 Сумма для оплаты привышает лимит автоматической оплаты. 
 Ваша заявка будет обрабатываться в индивидуальном порядке.""" if not payment_url else ""
         else:
-            optional_msg = "<b>Номер кошелька:</b> Номер кошелька Виталика для {fiat}"
+            e_wallet = await e_wallet_api.EWalletsApi().get(
+                self.crypto if self.exchange_type == self.SELL else self.fiat
+            )
+            optional_msg = f"<b>Номер кошелька:</b> {e_wallet.wallet}"
+            if e_wallet.memo:
+                optional_msg = optional_msg + f"\n<b>MEMO:</b> {e_wallet.memo}"
         optional_msg_memo = None
         if hasattr(self, "memo") and getattr(self, "memo") is not None:
             optional_msg_memo = f"<b>MEMO:</b> {self.memo}"
@@ -446,7 +463,7 @@ class ExchangeValueHandler1(helpers.BaseHandler):
             payment_type_optional_msg=buttons.PaymentType._collections.get(self.payment_type, [])[0],
             msg_date=self.msg_date, quantity=self.quantity,
             payment_type_optional_msg_cap=self.payment_type_optional_msg.capitalize(),
-            msg=self.msg_data, total_cost=total_cost, optional_msg=optional_msg,
+            msg=self.bill, total_cost=total_cost, optional_msg=optional_msg,
             expire=T_EXPIRE, active_to=str(self.msg_date + datetime.timedelta(minutes=T_EXPIRE)),
             payment_rus_descr=self.payment_rus_descr(), optional_msg_memo=optional_msg_memo or ""
         )
@@ -467,15 +484,50 @@ class ExchangeValueHandler2(helpers.BaseHandler):
             if self.email == self.msg_data:
                 self.TEXT = f"Письмо на почту '{self.msg_data} уже было высланно ранее.'"
                 await self.message_delete_processing()
-        msg = helper_send_email.setup_email_contents(
-            [self.msg_data], "Official_Plus_bot", {"text": "Реквизиты"}
-        )
         self.TEXT = f"На вашу почту '{self.msg_data} отправленны реквизиты.'"
         await self.send_msg()
         if hasattr(self, "_last_bot_message") and getattr(self, "_last_bot_message"):
             await bot.delete_message(chat_id=self.chat_id, message_id=self._last_bot_message)
             await self.update_state_data(_last_bot_message=None)
         # send email
+        exchange_event = self.event(False, False)
+        payment_url = payment_msg = wallet = memo = None
+        if hasattr(self, "_payment_url"):
+            if getattr(self, "_payment_url") is not None:
+                payment_url = self._payment_url
+            else:
+                payment_msg = """
+                    Сумма для оплаты привышает лимит автоматической оплаты. 
+                    Ваша заявка будет обрабатываться в индивидуальном порядке.
+                    """
+        else:
+            e_wallet = await e_wallet_api.EWalletsApi().get(
+                self.crypto if self.exchange_type == self.SELL else self.fiat
+            )
+            wallet = e_wallet.wallet
+            memo = e_wallet.memo
+        substitutions = dict(
+            order_id=self._order_id,
+            fiat=self.fiat.upper(),
+            exchange_event=exchange_event,
+            crypto=self.crypto.upper(),
+            payment_type_optional_msg=buttons.PaymentType._collections.get(self.payment_type, [])[0],
+            quantity=self.quantity,
+            payment_type_optional_msg_cap=self.payment_type_optional_msg.capitalize(),
+            total_cost=self.cost_fiat,
+            optional_msg_memo=self.memo if hasattr(self, "memo") and getattr(self, "memo") else '',
+            payment_rus_descr=self.payment_rus_descr(),
+            bill=self.bill,
+            payment_url=payment_url,
+            memo=memo,
+            payment_msg=payment_msg,
+            wallet=wallet,
+        )
+        html_contents = helpers.render_payment_details_template(substitutions)
+        contents = {"html": (html_contents, "html")}
+        msg = helper_send_email.setup_email_contents(
+            [self.msg_data], "Official_Plus_bot", contents
+        )
         async with helper_send_email.EmailAPI() as send_email:
             res = await send_email(msg)
 
@@ -506,12 +558,15 @@ async def admin_msg_telegram_new_order_approved(order_id: str, order_is_expired,
         # send email message
         # data.email
         btn = buttons.Admin().order_request(order_id)
-        await bot.send_message(
-            chat_id=data.chat_id,
-            text=text,
-            reply_markup=btn,
-            parse_mode=types.ParseMode.HTML
-        )
+        try:
+            await bot.send_message(
+                chat_id=data.chat_id,
+                text=text,
+                reply_markup=btn,
+                parse_mode=types.ParseMode.HTML
+            )
+        except aiogram_ex.ChatNotFound:
+            continue
 
 
 class Exchange5Step(helpers.BaseHandler):
@@ -555,19 +610,20 @@ async def admin_success_order(callback_query: types.CallbackQuery, state: FSMCon
     order_data = await order_api.OrderAPI().retrieve(int(order_id))
     if order_data.approve:
         return
+
     exchange_type_descr = helpers.Constant().get_exchange_type_descriptor(order_data.exchange_type, verb=False)
     payment_type_descr = buttons.PaymentType.DESCRIPTOR_VALUE.get(
-            order_data.payment_type) if helpers.Constant.SELL else "номер кошелька"
+            order_data.payment_type if order_data.exchange_type == helpers.Constant.SELL else buttons.PaymentType.BILL)
     text = f"""
 <strong>Обмен успешно выполнен!</strong>
 <b>Заявка</b> №-{order_id} обработана, ожидайте зачисление средств на Ваш счет.
 
 <b>{exchange_type_descr}:</b> {order_data.crypto.upper()} за {order_data.fiat.upper()}
-<b>Способ оплаты:</b>{order_data.payment_type}
-<b>Время:</b>{callback_query.message.date.strftime("%Y-%m-%d %H:%M:%S")}
+<b>Способ оплаты:</b> {order_data.payment_type}
+<b>Время:</b> {callback_query.message.date.strftime("%Y-%m-%d %H:%M:%S")}
 <b>Количесвто {order_data.crypto.upper()}:</b> {order_data.quantity}
-<b>{payment_type_descr.capitalize()}:</b>{order_data.bill}
-<b>Стоимость:</b>{order_data.cost_fiat} {order_data.fiat.upper()}
+<b>{payment_type_descr.capitalize()}:</b> {order_data.bill}
+<b>Стоимость:</b> {order_data.cost_fiat} {order_data.fiat.upper()}
     """
     await order_api.OrderAPI().set_success(int(order_id))
     await bot.send_message(

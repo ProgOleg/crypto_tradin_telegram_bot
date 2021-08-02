@@ -8,6 +8,7 @@ from aiogram.utils import exceptions as exe
 from jinja2 import Template
 
 from utils import api, buttons
+from utils import constant as const
 
 PAYMENT_TEMPLATE = "./utils/payment_details.html"
 
@@ -17,21 +18,6 @@ def format_delta(delta):
     d["hours"], rem = divmod(delta.seconds, 3600)
     d["minutes"], d["seconds"] = divmod(rem, 60)
     return "{days} Дней {hours}:{minutes}:{seconds}".format(**d)
-
-
-async def message_delete_processing(bot, message, state, state_data, ms_text):
-
-    await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-
-    if state_data.get("_last_bot_message"):
-        await bot.edit_message_text(
-            ms_text,
-            chat_id=message.chat.id,
-            message_id=state_data.get("_last_bot_message")
-        )
-    else:
-        ms = await bot.send_message(message.chat.id, ms_text)
-        await state.update_data(_last_bot_message=ms.message_id)
 
 
 def parse_query(query) -> (str, str):
@@ -67,32 +53,7 @@ def state_machine_handler(
     return _state_data_keys == expected_keys and all(_state_data.values())
 
 
-class Constant:
-    BUY = "buy_event"
-    SELL = "sell_event"
-
-    BTC = "btc"
-    ETH = "eth"
-    LTC = "ltc"
-    XRP = "xrp"
-    TRX = "trx"
-    USDT = "usdt"
-    BNB = "bnb"
-    XLM = "xlm"
-    XEM = "xem"
-
-    UAH = "uah"
-    RUB = "rub"
-    USD = "usd"
-
-    FIAT = {UAH, RUB, USD}
-    MEMO_COINS = {XRP, BNB, XLM, XEM}
-
-    QUIWI = "qiwi"
-    VISA = "visa/mastercard"
-    MOBILE = "mobile"
-    BILL = "bill"
-    VISA_KEY = "visa"
+class Constant(const.Constants):
 
     @classmethod
     def get_exchange_type_descriptor(
@@ -122,7 +83,6 @@ class BaseHandler(Constant):
 
     TEXT = ""
     BUTTONS = None
-    # BACK_BTN = ""
 
     def __init__(
             self,

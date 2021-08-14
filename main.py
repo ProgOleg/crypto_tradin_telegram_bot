@@ -1,8 +1,6 @@
 import logging
 import datetime
 import decimal
-import pathlib
-import string
 
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.contrib.fsm_storage.redis import RedisStorage
@@ -10,7 +8,7 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.utils import exceptions as aiogram_ex
 
-from config import T_TOKEN, T_EXPIRE, REDIS_HOST
+from config import T_TOKEN, T_EXPIRE, REDIS_HOST, DEBUG
 from utils import helpers, buttons, validators, exceptions as exep, api, helper_send_email
 from db.db_api import (
     user_api,
@@ -19,10 +17,16 @@ from db.db_api import (
     e_wallet_api,
 )
 
-
-logging.basicConfig(level=logging.INFO)
+if DEBUG:
+    logging.basicConfig(level=logging.INFO, filename="logs.txt")
+else:
+    logging.basicConfig(
+        format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+        datefmt='%d-%m-%Y:%H:%M:%S',
+        level=logging.INFO,
+        filename='logs.txt'
+    )
 bot = Bot(token=T_TOKEN)
-# storage = MemoryStorage()
 storage = RedisStorage(host=REDIS_HOST)
 dp = Dispatcher(bot, storage=storage)
 
@@ -343,7 +347,7 @@ class ExchangeValueHandler(helpers.BaseHandler):
 
     async def handler(self, *args, **kwargs):
         quantity = self.msg_data.replace(",", ".")
-        min_deposit, _, _ = await api.KunaApi().parse_fees(self.crypto)
+        min_deposit, _, _ = await api.KunaApi().parse_fees_v2(self.crypto)
         try:
             quantity = decimal.Decimal(quantity)
             if quantity < min_deposit:

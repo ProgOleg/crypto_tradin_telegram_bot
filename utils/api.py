@@ -5,6 +5,7 @@ import time
 import hashlib
 import hmac
 import json
+import logging
 from urllib import parse
 
 
@@ -12,23 +13,22 @@ from jsonpath_ng.ext import parser
 
 import config
 from utils import helpers
-from db.db_api import settings_api
+from db.db_api import settings_api, cost_pair_api, fees_api
+from utils import constant as const
 
 
-class KunaApi:
+class KunaApi(const.Constants):
+    NORMALIZE_COINS = {
+        const.Constants.USDT_ERC20: "usdt_eth",
+        const.Constants.USDT_TRC20: "usdt_trx",
+        const.Constants.BTC: "satoshi",
+        const.Constants.SHIB: "shib_eth",
+        const.Constants.USDC: "usdc_eth"
+    }
 
-    BTC = "btc"
-    ETH = "eth"
-    LTC = "ltc"
-    XRP = "xrp"
-    TRX = "trx"
-    USDT = "usdt"
-    USDT_TRC20 = "usdt(trc20)"
-    USDT_ERC20 = "usdt(erc20)"
-
-    CRYPTO_KEYS = (
-        BTC, ETH, LTC, XRP, TRX, USDT
-    )
+    @classmethod
+    def __revers_bool(cls, val: bool) -> bool:
+        return False if val else True
 
     @classmethod
     async def _get_exchange(cls, crypto_alias):
@@ -39,55 +39,6 @@ class KunaApi:
                 return await response.json()
 
     @classmethod
-    def _get_uah_cost(cls, data):
-        value = data.get("uah")
-        return decimal.Decimal(value)
-
-    @classmethod
-    async def get_btc_cost(cls):
-        data = await cls._get_exchange(cls.BTC)
-        return cls._get_uah_cost(data)
-
-    @classmethod
-    async def get_eth_cost(cls):
-        data = await cls._get_exchange(cls.ETH)
-        return cls._get_uah_cost(data)
-
-    @classmethod
-    async def get_ltc_cost(cls):
-        data = await cls._get_exchange(cls.LTC)
-        return cls._get_uah_cost(data)
-
-    @classmethod
-    async def get_xrp_cost(cls):
-        data = await cls._get_exchange(cls.XRP)
-        return cls._get_uah_cost(data)
-
-    @classmethod
-    async def get_trx_cost(cls):
-        data = await cls._get_exchange(cls.TRX)
-        return cls._get_uah_cost(data)
-
-    @classmethod
-    async def get_usdt_cost(cls):
-        data = await cls._get_exchange(cls.USDT)
-        return cls._get_uah_cost(data)
-
-    @classmethod
-    async def get_cost(cls, crypto):
-        getters = {
-            cls.BTC: cls.get_btc_cost,
-            cls.ETH: cls.get_eth_cost,
-            cls.LTC: cls.get_ltc_cost,
-            cls.XRP: cls.get_xrp_cost,
-            cls.TRX: cls.get_trx_cost,
-            cls.USDT: cls.get_usdt_cost,
-        }
-
-        func = getters.get(crypto)
-        return await func() or None
-
-    @classmethod
     async def _get_fees(cls):
         async with aiohttp.ClientSession() as session:
             async with session.get(
@@ -95,52 +46,38 @@ class KunaApi:
             ) as response:
                 return await response.json()
 
-    @classmethod
-    async def parse_fees(cls, crypto: str):
-        # in the future, get a margin for the withdrawal of the hryvnia!
-        # normalize USDT(ERC20-TRC20) -> USDT
-        crypto = cls.USDT if crypto in (cls.USDT_ERC20, cls.USDT_TRC20) else crypto
-        data = await cls._get_fees()
-        res = parser.parse(f"$[?(@.currency='{crypto}')]").find(data)
-        value = res[0].value
-        min_deposit = value["min_deposit"]["amount"]
-        withdraw_fees = value["withdraw_fees"]
-        fees_type = withdraw_fees[0]["type"]
-        fees_amount = withdraw_fees[0]["asset"]["amount"]
-        # HARD CODE fees_amount for USDT crypto!!!
-        if crypto == cls.USDT:
-            fees_amount = 1
-        return decimal.Decimal(str(min_deposit)), fees_type, decimal.Decimal(str(fees_amount))
 
-    @classmethod
-    async def calculate_total_cost(
-            cls,
-            from_: str,
-            to: str,
-            quantity: decimal.Decimal,
-            exchange_type: str
-    ):
-        # количество * курс(uah) *
-        cost_for_1_unit, _fees = await asyncio.gather(
-            cls.get_cost_tickers(from_, to),
-            cls.parse_fees(to if exchange_type == helpers.Constant.BUY else from_)
-        )
-        _, fees_type, fees_amount = _fees
-        cost_uah = cost_for_1_unit * quantity
-        if fees_type != "fixed":
-            fees = fees_amount * cost_for_1_unit
-            cost_uah_plus_fees = cost_uah + fees
-        else:
-            fees = fees_amount + cost_for_1_unit
-            cost_uah_plus_fees = cost_uah + fees
-        markup = cost_uah_plus_fees * config.MARKUP
-        if exchange_type == helpers.Constant.BUY:
-            total = cost_uah_plus_fees + markup
-        elif exchange_type == helpers.Constant.SELL:
-            total = cost_uah_plus_fees - markup
-        else:
-            assert False
-        return round(total, 2)
+    # @classmethod
+    # async def calculate_total_cost(
+    #         cls,
+    #         from_: str,
+    #         to: str,
+    #         quantity: decimal.Decimal,
+    #         exchange_type: str
+    # ):
+    #     # количество * курс(uah) *
+    #     cost_for_1_unit, _fees = await asyncio.gather(
+    #         cls.get_cost_tickers(from_, to),
+    #         cls.parse_fees(to if exchange_type == helpers.Constant.BUY else from_)
+    #     )
+    #     _, fees_type, fees_amount = _fees
+    #     cost_uah = cost_for_1_unit * quantity
+    #     if fees_type == "fixed":
+    #         fees = fees_amount + cost_for_1_unit
+    #         cost_uah_plus_fees = cost_uah + fees
+    #     else:
+    #         fees = fees_amount * cost_for_1_unit
+    #         cost_uah_plus_fees = cost_uah + fees
+    #
+    #     markup = cost_uah_plus_fees * config.MARKUP
+    #     if exchange_type == helpers.Constant.BUY:
+    #         total = cost_uah_plus_fees + markup
+    #     elif exchange_type == helpers.Constant.SELL:
+    #         total = cost_uah_plus_fees - markup
+    #     else:
+    #         assert False
+    #     return round(total, 2)
+
 
     @classmethod
     async def calculate_total_cost_v2(
@@ -154,7 +91,7 @@ class KunaApi:
         # normalize USDT(ERC20-TRC20) -> USDT
         from_, to = (cls.USDT if el in (cls.USDT_ERC20, cls.USDT_TRC20) else el for el in [from_, to])
         quantity = decimal.Decimal(quantity)
-        cost_for_1_unit, is_reversed = await cls.get_cost_tickers(from_, to)
+        cost_for_1_unit, is_reversed = await cls.get_cost_coins_pair(from_, to)
         cost_for_1_unit = 1 / cost_for_1_unit if is_reversed else cost_for_1_unit
         total_cost = cost_for_1_unit * quantity
         markup_value = await settings_api.SettingsApi().get_markup()
@@ -180,7 +117,7 @@ class KunaApi:
             "accept": "application/json",
             "kun-nonce": nonce,
             "kun-apikey": config.KUNA_PUBLIC_KEY,
-            "kun-signature": kun_signature
+            "kun-signature": kun_signature,
         }
         async with aiohttp.ClientSession() as session:
             async with session.post(path, headers=headers, json=body) as response:
@@ -211,18 +148,139 @@ class KunaApi:
                     return res
 
     @classmethod
-    async def get_cost_tickers(cls, from_, to) -> (decimal.Decimal, bool):
+    async def _get_cost_tickers_api(cls, from_, to) -> (decimal.Decimal, bool):
         # first argument is cost for 1 unit, second is flag reverse args to from
         is_reversed = False
         res = await cls._get_cost_tickers(from_, to)
         if not res:
             res = await cls._get_cost_tickers(to, from_)
             is_reversed = True
-        return res, is_reversed
+            if not res:
+                logging.error(
+                    f"get_cost_tickers return nothing! args: from_={from_}, to={to}"
+                )
+        return res or 0, is_reversed
 
+    @classmethod
+    async def get_cost_coins_pair(cls, from_: str, to: str) -> (decimal.Decimal, bool):
+        # first argument is cost for 1 unit, second is flag reverse args to from
+        is_reversed = False
+        pair = [from_, to]
+        split_pair = ",".join(pair)
+        # optimization request from api
+        if split_pair not in cls.VARIATION_OF_COINS:
+            is_reversed = True
+            pair = [to, from_]
+            split_pair = ",".join(pair)
+
+        res_from_db = await cost_pair_api.CostPairApi().retrieve_cost(split_pair)
+        if res_from_db:
+            cost, is_reversed_from_db = res_from_db
+            is_reversed = cls.__revers_bool(is_reversed) if is_reversed_from_db else is_reversed
+        else:
+            cost, is_reversed_from_api = await cls._get_cost_tickers_api(*pair)
+            if is_reversed_from_api:
+                is_reversed = cls.__revers_bool(is_reversed) if is_reversed_from_api else is_reversed
+            if cost:
+                pair = [to, from_] if is_reversed else pair
+                await cost_pair_api.CostPairApi().create(pair="".join(pair), cost=cost)
+        return cost or 0, is_reversed
+
+    @classmethod
+    async def _parse_fees(cls, crypto: str):
+        """
+        Note:
+            withdraw fees - комиссия за снятие
+        """
+        crypto = cls.NORMALIZE_COINS.get(crypto, crypto)
+        data = await cls._get_fees()
+        res = parser.parse(f"$[?(@.code='{crypto}')]").find(data)
+        if len(res) != 0:
+            value = res[0].value
+            min_deposit = value["min_deposit"]["amount"]
+            withdraw_fees = value["withdraw_fees"]
+            fees_type = withdraw_fees[0]["type"]
+            fees_amount = withdraw_fees[0]["asset"]["amount"]
+            return decimal.Decimal(str(min_deposit)), fees_type, decimal.Decimal(str(fees_amount))
+        else:
+            logging.error(
+                f"parse_fees_v2 return nothing! args: crypto={crypto}"
+            )
+            return 0, "fixed", 0
+
+    @classmethod
+    async def parse_fees_v2(cls, crypto: str):
+        res = await fees_api.FeesApi().retrieve_fees(crypto)
+        if res:
+            min_deposit, fees_type, fees_amount = res
+        else:
+            min_deposit, fees_type, fees_amount = await cls._parse_fees(crypto)
+            await fees_api.FeesApi().create(
+                coin=crypto, data=dict(min_deposit=min_deposit, fees_type=fees_type, fees_amount=fees_amount)
+            )
+        return min_deposit, fees_type, fees_amount
 
 
 if __name__ == '__main__':
     # asyncio.run(KunaApi.calculate_total_cost(KunaApi.BTC))
-    print(asyncio.run(KunaApi.get_payment_url("uah", 29000)))
+    # print(asyncio.run(KunaApi.get_payment_url("uah", 29000)))
     # print(asyncio.run(KunaApi.calculate_total_cost_v2("btc", "eth", decimal.Decimal(1), helpers.Constant.BUY)))
+
+    async def test_parse_fees():
+        inst = KunaApi()
+        for el in inst.CRYPTO_KOINS:
+            res = await inst.parse_fees_v2(el)
+            print(res)
+
+
+    """
+    Test const coin pair cost
+    """
+    async def test_get_cost_coins_pair():
+        # only in test db!
+        # await cost_pair_api.CostPairApi().delete_(all_=True)
+        # res = await cost_pair_api.CostPairApi()._get(all_=True)
+        # assert res == []
+        inst = KunaApi()
+        expected_results = {}
+
+        for key, val in inst.CONST_RELATIONS.items():
+            if key in (inst.USDT_ERC20, inst.USDT_TRC20):
+                key = inst.USDT
+            for el in val:
+                if el in (inst.USDT_ERC20, inst.USDT_TRC20):
+                    el = inst.USDT
+                pair = [key, el]
+                key_ = f"{key}{el}"
+                expected_res = await inst.get_cost_coins_pair(*pair)
+                if not expected_res[0]:
+                    print("i'm slip.")
+                    await asyncio.sleep(60)
+                    expected_res = await inst.get_cost_coins_pair(*pair)
+                    if not expected_res[0]:
+                        print("CRITICAL ERROR!")
+                expected_results[key_] = expected_res
+
+        for key, val in inst.CONST_RELATIONS.items():
+            if key in (inst.USDT_ERC20, inst.USDT_TRC20):
+                key = inst.USDT
+            for el in val:
+                if el in (inst.USDT_ERC20, inst.USDT_TRC20):
+                    el = inst.USDT
+                pair = [key, el]
+                key_ = f"{key}{el}"
+                value_from_get_cost_coins_pair = await inst.get_cost_coins_pair(*pair)
+                if not value_from_get_cost_coins_pair[0]:
+                    print("i'm slip.")
+                    await asyncio.sleep(60)
+                    value_from_get_cost_coins_pair = await inst.get_cost_coins_pair(*pair)
+                    if not value_from_get_cost_coins_pair[0]:
+                        print("CRITICAL ERROR!")
+                try:
+                    assert expected_results[key_] == value_from_get_cost_coins_pair
+                except AssertionError as ex:
+                    print(f"{expected_results[key_]}{value_from_get_cost_coins_pair}")
+                    print(key_)
+                    raise ex
+
+    # asyncio.run(test_parse_fees())

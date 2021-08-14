@@ -7,6 +7,8 @@ dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
 if os.path.exists(dotenv_path):
     load_dotenv(dotenv_path)
 
+DEBUG = bool(int(os.getenv("DEBUG")))
+
 # telegram settings
 T_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 
@@ -39,4 +41,7 @@ KUNA_SECRET_KEY = os.getenv("KUNA_SECRET_KEY", "")
 KUNA_PUBLIC_KEY = os.getenv("KUNA_PUBLIC_KEY", "")
 
 MARKUP = decimal.Decimal("0.03")
-
+# time when cost pair storing on db will expired in seconds
+TIME_EXPIRE_COST_PAIR = 5 * 60
+# time when fees storing on db will expired in seconds
+TIME_EXPIRE_FEES = 24 * 60 * 60

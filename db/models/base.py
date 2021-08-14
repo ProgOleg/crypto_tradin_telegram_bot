@@ -59,3 +59,25 @@ class EWallets(Base):
     identifier = sa.Column("identifier", sa.String(20), nullable=False, unique=True, primary_key=True)
     wallet = sa.Column("wallet", sa.String(1024), nullable=False)
     memo = sa.Column("memo", sa.String(1024), nullable=True)
+
+
+class CostPair(Base):
+    __tablename__ = "cost_pair"
+
+    pair = sa.Column("pair", sa.String(20), nullable=False, primary_key=True)
+    cost = sa.Column("cost", sa.DECIMAL, nullable=False)
+    updated_at = sa.Column(
+        "updated_at", sa.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+
+class Fees(Base):
+    __tablename__ = "fees"
+
+    coin = sa.Column("coin", sa.String(255), primary_key=True)
+    min_deposit = sa.Column("min_deposit", sa.DECIMAL, nullable=False)
+    fees_amount = sa.Column("fees_amount", sa.DECIMAL, nullable=False)
+    fees_type = sa.Column("fees_type", sa.String(20), nullable=False)
+    updated_at = sa.Column(
+        "updated_at", sa.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )

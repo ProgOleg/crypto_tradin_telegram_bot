@@ -140,3 +140,4 @@ cython_debug/
 /prod.env
 /wallets.py
 /logs.txt
+/redis/data/dump.rdb

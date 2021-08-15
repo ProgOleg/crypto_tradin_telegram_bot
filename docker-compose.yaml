@@ -1,0 +1,21 @@
+version: "3.9"
+services:
+  web:
+    env_file:
+      - .env
+    build: .
+    ports:
+      - "8084:8084"
+    restart: always
+    volumes:
+    - ./logs.txt:/usr/src/app/logs.txt
+    depends_on:
+      - redis_db
+  redis_db:
+    image: "redis:alpine"
+    restart: always
+    command: redis-server /usr/local/etc/redis/redis.conf
+    volumes:
+    - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
+    - ./redis/data:/data
+#    - ./redis-server.log:/usr/local/etc/redis/redis-server.log

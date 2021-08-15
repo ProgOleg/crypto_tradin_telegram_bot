@@ -134,15 +134,19 @@ class BaseHandler(Constant):
             await self.send_msg()
 
     async def edit_msg(self, msg_id: int = None, save: bool = True):
-        msg = await self.bot.edit_message_text(
-            chat_id=self.chat_id,
-            message_id=msg_id or self.msg_id,
-            text=self.text or self.TEXT,
-            reply_markup=self.BUTTONS,
-            parse_mode=types.ParseMode.HTML
-        )
-        if save:
-            await self.update_state_data(_message_id=msg.message_id)
+        try:
+            msg = await self.bot.edit_message_text(
+                chat_id=self.chat_id,
+                message_id=msg_id or self.msg_id,
+                text=self.text or self.TEXT,
+                reply_markup=self.BUTTONS,
+                parse_mode=types.ParseMode.HTML
+            )
+        except exe.MessageNotModified as ex:
+            pass
+        else:
+            if save:
+                await self.update_state_data(_message_id=msg.message_id)
 
     async def send_msg(self):
         msg = await self.bot.send_message(
@@ -163,11 +167,14 @@ class BaseHandler(Constant):
     async def message_delete_processing(self):
         await self.bot.delete_message(chat_id=self.chat_id, message_id=self.msg_id)
         if hasattr(self, "_last_bot_message") and getattr(self, "_last_bot_message"):
-            await self.bot.edit_message_text(
-                self.TEXT,
-                chat_id=self.chat_id,
-                message_id=self._last_bot_message
-            )
+            try:
+                await self.bot.edit_message_text(
+                    self.TEXT,
+                    chat_id=self.chat_id,
+                    message_id=self._last_bot_message
+                )
+            except exe.MessageNotModified as ex:
+                pass
         else:
             ms = await self.bot.send_message(self.chat_id, self.TEXT)
             await self.update_state_data(_last_bot_message=ms.message_id)

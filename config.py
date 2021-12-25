@@ -26,7 +26,7 @@ PG_URL = f"postgresql+asyncpg://{DB_USER}:{DB_PSWD}@{DB_HOST}/{DB_NAME}"
 
 REDIS_HOST = os.getenv("REDIS_HOST", "redis_db")
 # time when order is expired in min
-T_EXPIRE = 1
+T_EXPIRE = int(os.getenv("T_EXPIRE", "1"))
 
 KUNA_BASE_URL = "https://api.kuna.io:443"
 KUNA_VERSION = "/v3"

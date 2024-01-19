@@ -7,6 +7,7 @@ import hmac
 import json
 import logging
 from urllib import parse
+import typing as t
 
 
 from jsonpath_ng.ext import parser
@@ -32,7 +33,7 @@ class KunaApi(const.Constants):
 
     @classmethod
     async def _get_exchange(cls, crypto_alias):
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(trust_env = True) as session:
             async with session.get(
                     config.KUNA_EXCHANGE_RATES + crypto_alias, headers={"Accept": "application/json"}
             ) as response:
@@ -40,9 +41,9 @@ class KunaApi(const.Constants):
 
     @classmethod
     async def _get_fees(cls):
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(trust_env = True) as session:
             async with session.get(
-                    config.KUNA_FEES_URL, headers={"Accept": "application/json"}
+                    config.KUNA_FEES_URL, headers={"Accept": "application/json"}, verify_ssl=False
             ) as response:
                 return await response.json()
 
@@ -119,8 +120,8 @@ class KunaApi(const.Constants):
             "kun-apikey": config.KUNA_PUBLIC_KEY,
             "kun-signature": kun_signature,
         }
-        async with aiohttp.ClientSession() as session:
-            async with session.post(path, headers=headers, json=body) as response:
+        async with aiohttp.ClientSession(trust_env = True) as session:
+            async with session.post(path, headers=headers, json=body, verify_ssl=False) as response:
                 if response.status == 200:
                     return await response.json()
 
@@ -137,15 +138,18 @@ class KunaApi(const.Constants):
         return payment_url
 
     @classmethod
-    async def _get_cost_tickers(cls, from_, to) -> decimal.Decimal:
+    async def _get_cost_tickers(cls, from_: str, to: str) -> t.Optional[decimal.Decimal]:
         symbols = from_ + to
-        async with aiohttp.ClientSession() as session:
-            async with session.get(config.KUNA_TIKETS_URL, data={"symbols": symbols}) as response:
+        async with aiohttp.ClientSession(trust_env = True) as session:
+            async with session.get(config.KUNA_TIKETS_URL, data={"symbols": symbols}, verify_ssl=False) as response:
                 if response.status == 200:
-                    cost = await response.json()
-                    res = cost[0][7] or 0
-                    res = decimal.Decimal(str(res))
-                    return res
+                    data = await response.json()
+                    data = data.get("data")
+                    if not data:
+                        return
+                    for el in data:
+                        if el["pair"] == f"{from_.upper()}_{to.upper()}":
+                            return decimal.Decimal(str(el["price"]))
 
     @classmethod
     async def _get_cost_tickers_api(cls, from_, to) -> (decimal.Decimal, bool):

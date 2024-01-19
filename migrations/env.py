@@ -35,7 +35,8 @@ def get_url() -> str:
     password = cnfg.DB_PSWD
     server = cnfg.DB_HOST
     db = cnfg.DB_NAME
-    return f"postgresql+psycopg2://{user}:{password}@{server}/{db}"
+    port = cnfg.DB_PORT
+    return f"postgresql+psycopg2://{user}:{password}@{server}:{port}/{db}"
 
 
 def run_migrations_offline():

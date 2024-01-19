@@ -22,7 +22,7 @@ DB_PSWD = os.getenv("POSTGRES_PASSWORD", "password")
 DB_HOST = os.getenv("POSTGRES_HOST", "127.0.0.1")
 DB_PORT = os.getenv("POSTGRES_PORT", "5432")
 DB_NAME = os.getenv("POSTGRES_DB_NAME", "crypto_bot")
-PG_URL = f"postgresql+asyncpg://{DB_USER}:{DB_PSWD}@{DB_HOST}/{DB_NAME}"
+PG_URL = f"postgresql+asyncpg://{DB_USER}:{DB_PSWD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 REDIS_HOST = os.getenv("REDIS_HOST", "redis_db")
 # time when order is expired in min
@@ -30,12 +30,13 @@ T_EXPIRE = int(os.getenv("T_EXPIRE", "1"))
 
 KUNA_BASE_URL = "https://api.kuna.io:443"
 KUNA_VERSION = "/v3"
+KUNA_V4 = "/v4"
 KUNA_V3_URL = KUNA_BASE_URL + KUNA_VERSION
+KUNA_V4_URL = KUNA_BASE_URL + KUNA_V4
 KUNA_EXCHANGE_RATES = KUNA_V3_URL + "/exchange-rates/"
-KUNA_FEES_URL = KUNA_V3_URL + "/fees/"
+KUNA_FEES_URL = KUNA_V4_URL + "/public/fees"
 KUNDA_DEPOSIT_URL = KUNA_V3_URL + "/auth/deposit"
-KUNA_TIKETS_URL = KUNA_V3_URL + "/tickers"
-
+KUNA_TIKETS_URL = KUNA_V4_URL + "/markets/public/tickers"
 
 KUNA_SECRET_KEY = os.getenv("KUNA_SECRET_KEY", "")
 KUNA_PUBLIC_KEY = os.getenv("KUNA_PUBLIC_KEY", "")

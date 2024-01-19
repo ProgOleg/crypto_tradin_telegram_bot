@@ -4,6 +4,7 @@ import decimal
 
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.contrib.fsm_storage.redis import RedisStorage
+from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.utils import exceptions as aiogram_ex
@@ -18,7 +19,7 @@ from db.db_api import (
 )
 
 if DEBUG:
-    logging.basicConfig(level=logging.INFO, filename="logs.txt")
+    logging.basicConfig(level=logging.INFO)
 else:
     logging.basicConfig(
         format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -27,7 +28,8 @@ else:
         filename='logs.txt'
     )
 bot = Bot(token=T_TOKEN)
-storage = RedisStorage(host=REDIS_HOST)
+# storage = RedisStorage(host=REDIS_HOST)
+storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
 
@@ -181,10 +183,13 @@ async def query_router(query, state):
 class ProcessSupport(helpers.BaseHandler):
 
     TEXT = """
-ℹ️ Поддержка
+🌟 Для связи с нами, используйте удобные контакты:
 
-Если у Вас возникли вопросы по обмену, свяжитесь с нашим оператором @andro_rei.
-Если желаете обсудить индивидуальные условия, просьба написать нам на почту xplus_crypto@protonmail.com
+📧 Электронная почта: xplus.exchange@gmail.com
+
+📱 Telegram: @miracello
+
+Не стесняйтесь обращаться, если у вас есть вопросы или нужна помощь! 🚀
     """
 
     async def handler(self, *args, **kwargs):
@@ -193,11 +198,17 @@ class ProcessSupport(helpers.BaseHandler):
 
 class ProcessInfo(helpers.BaseHandler):
     TEXT = """
-Plus bot - бот для быстрого, безопасного и анонимного обмена криптовалюты на валюту Вашей страны, либо на другую криптовалюту. Самые низкие комиссии и актуальный курс по криптовалютным парам.  Поддержка в реальном режиме 24/7!
+💸 Уникальный обмен валюты на <a href="https://x-plus.io" target="_blank">xPlus</a> 💸
+💳 Моментальные операции, без регистрации 💳
+🌐Присоединяйтесь к тысячам довольных клиентов 🌐
+💰Обменивай крипту без границ 💰
+🔒Минимальные комиссии, фиксированный курс и анонимные обмены 🔒
+🐗 Экспресс-обмен в любое время 🐗  
+✏️ @miracello ✉️ xplus.exchange@gmail.com ⚙️ x-plus.io 💎
     """
 
     async def handler(self, *args, **kwargs):
-        await self.send_msg()
+        await self.send_photo(photo=types.InputFile("static/photo_2024-01-19_18-34-51.jpg"))
 
 
 class ProcessLanguages(helpers.BaseHandler):

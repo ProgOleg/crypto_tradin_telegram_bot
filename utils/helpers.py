@@ -85,14 +85,14 @@ class BaseHandler(Constant):
     BUTTONS = None
 
     def __init__(
-            self,
-            bot: Bot,
-            msg_query,
-            state: FSMContext,
-            state_data: dict,
-            msg_data: Optional[str] = None,
-            query_path: Optional[str] = None,
-            data_query: Optional[str] = None
+        self,
+        bot: Bot,
+        msg_query,
+        state: FSMContext,
+        state_data: dict,
+        msg_data: Optional[str] = None,
+        query_path: Optional[str] = None,
+        data_query: Optional[str] = None
     ):
         self.bot = bot
         self.msg_query = msg_query
@@ -152,6 +152,16 @@ class BaseHandler(Constant):
         msg = await self.bot.send_message(
             chat_id=self.chat_id,
             text=self.text or self.TEXT,
+            parse_mode=types.ParseMode.HTML,
+            reply_markup=self.BUTTONS
+        )
+        await self.update_state_data(_message_id=msg.message_id)
+
+    async def send_photo(self, photo):
+        msg = await self.bot.send_photo(
+            photo=photo,
+            chat_id=self.chat_id,
+            caption=self.text or self.TEXT,
             parse_mode=types.ParseMode.HTML,
             reply_markup=self.BUTTONS
         )

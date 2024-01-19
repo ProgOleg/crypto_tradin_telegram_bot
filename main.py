@@ -9,7 +9,7 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.utils import exceptions as aiogram_ex
 
-from config import T_TOKEN, T_EXPIRE, REDIS_HOST, DEBUG
+from config import T_TOKEN, T_EXPIRE, REDIS_HOST, DEBUG, INFO_PAGE_IMAGE
 from utils import helpers, buttons, validators, exceptions as exep, api, helper_send_email
 from db.db_api import (
     user_api,
@@ -17,6 +17,7 @@ from db.db_api import (
     admin_api,
     e_wallet_api,
 )
+
 
 if DEBUG:
     logging.basicConfig(level=logging.INFO)
@@ -208,7 +209,7 @@ class ProcessInfo(helpers.BaseHandler):
     """
 
     async def handler(self, *args, **kwargs):
-        await self.send_photo(photo=types.InputFile("static/photo_2024-01-19_18-34-51.jpg"))
+        await self.send_photo(photo=types.InputFile(INFO_PAGE_IMAGE))
 
 
 class ProcessLanguages(helpers.BaseHandler):

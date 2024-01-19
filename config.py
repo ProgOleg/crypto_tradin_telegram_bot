@@ -46,3 +46,5 @@ MARKUP = decimal.Decimal("0.03")
 TIME_EXPIRE_COST_PAIR = 5 * 60
 # time when fees storing on db will expired in seconds
 TIME_EXPIRE_FEES = 24 * 60 * 60
+
+INFO_PAGE_IMAGE = os.getenv("INFO_PAGE_IMAGE", "static/photo_2024-01-19_18-34-51.jpg")

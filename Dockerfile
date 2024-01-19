@@ -18,6 +18,7 @@ COPY utils /usr/src/app/utils
 COPY db /usr/src/app/db
 COPY migrations /usr/src/app/migrations
 COPY config.py /usr/src/app/
+COPY static /usr/src/app/static
 
 RUN pip3 install --no-cache-dir -r requirements.txt
 
